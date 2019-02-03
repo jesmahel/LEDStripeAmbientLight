@@ -1,6 +1,6 @@
 #include <FastLED.h>
-#define NUM_LEDS 291
-#define LED_ECKE = 155
+#define NUM_LEDS 60
+#define LED_ECKE = 32
 
 //----  Digital out
 #define LED_PIN 11
@@ -22,8 +22,8 @@
 #define DIGIN13 13
 #define DIGIN14 14
 #define DIGIN15 15
-#define HELLMITTELN 20
-#define MITTEL_N 16
+#define HELLMITTELN 4
+#define MITTEL_N 4
 
 //-----------------------------------------------------------------
 
@@ -31,7 +31,7 @@
 CRGB leds[NUM_LEDS];
 int Farbe = 128;
 int Farbe_alt = 128;
-int hell_alt = 128;
+int hell_alt = 40;
 boolean wechsel = false;
 boolean lichtan = true;
 int prog = 1; //Regenbogen
@@ -56,7 +56,7 @@ void setup()
 {
   //----  Digital I/O setzen
   pinMode(LED_PIN, OUTPUT); // LED_PIN als Ausgang definieren
-  //pinMode(EINAUS, INPUT);   // Ein Aus Schalter als EIngang definieren
+  pinMode(EINAUS, INPUT);   // Ein Aus Schalter als EIngang definieren
   //pinMode(ZURUECK, INPUT);  // ZURUECK-Schalter als Eingang definieren
   //pinMode(VOR, INPUT);      // VOR-Schalter als Eingang definieren
   
@@ -104,7 +104,10 @@ void loop()
     poti /= MITTEL_N;
 
     int hue;
-    //int einaus = digitalRead(EINAUS);   // EinAus Schalter auslesen
+    int einaus = digitalRead(EINAUS);   // EinAus Schalter auslesen
+
+    
+
     //int zurueck = digitalRead(ZURUECK); // Zurück Schalter auslesen
     //int vor = digitalRead(VOR);         // Vor Schalter auslesen
 
@@ -159,9 +162,10 @@ void loop()
       hue_geschw = (poti / 128) + 1;
 
       // Helligkeit
-      hellakt = poti/8;
+      //hellakt = poti/8;
+      hellakt = 17;
       hellakt = hellakt % 16;
-      hellakt = 135 + hellakt * 8;
+      hellakt = 20 + hellakt * 8;
       hellm[hellw] = hellakt;
 
       // Wertspeicher shiften
@@ -179,14 +183,14 @@ void loop()
       }
       hell /= HELLMITTELN;
       
-      Serial.print(hell);
-      Serial.print("\n");
+      //Serial.print(hell);
+      //Serial.print("\n");
       
-      if (hell > 255)
+      if (hell > 40)
       {
-        hell = 255;
+        hell = 40;
       }
-      else if (hell < 40)
+      else if (hell < 30)
       {
         hell = 0;
       }

@@ -1,0 +1,5 @@
+{
+    "board": "arduino:avr:uno",
+    "sketch": "LEDInstallation_20170507.ino",
+    "port": "COM5"
+}

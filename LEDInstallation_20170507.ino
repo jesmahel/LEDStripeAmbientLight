@@ -1,6 +1,6 @@
 #include <FastLED.h>
 #define NUM_LEDS 291
-#define LED_ECKE = 155
+//#define LED_ECKE = 12
 
 //----  Digital out
 #define LED_PIN 11
@@ -10,232 +10,407 @@
 
 //---- Digital in
 #define EINAUS 12
-#define ZURUECK 13
-#define VOR 14
+#define ZURUECK 5
+#define VOR 4
 
-#define DIGIN7 7
-#define DIGIN8 8
-#define DIGIN9 9
-#define DIGIN10 10
-#define DIGIN11 11
-#define DIGIN12 12
-#define DIGIN13 13
-#define DIGIN14 14
-#define DIGIN15 15
-#define HELLMITTELN 20
-#define MITTEL_N 16
+//---- Light states
+#define ON true
+#define OFF false
+
+#define MINHELL 30   //Mindesthelligkeit
+#define MAXPROG 3    //Höchstes Programm
 
 //-----------------------------------------------------------------
 
 //----   LED Stripe initialisieren
 CRGB leds[NUM_LEDS];
-int Farbe = 128;
-int Farbe_alt = 128;
-int hell_alt = 128;
-boolean wechsel = false;
-boolean lichtan = true;
-int prog = 1; //Regenbogen
-int offset = 0; // Start bei Durchlauf
-int del = 200; // ms Verzögerung
-int hue_start = 0;
-int hue_counter = 0;
-int hue_geschw = 2; // 1 = Regenbogen passend für alle LED, 2 = halber Regenbogen , etc...
-int hellm[HELLMITTELN];
-int hellw = 0;
-int hellakt = 0;
-int hell;
 
-int potim[MITTEL_N];
-int potiakt = 0;
-int potiw = 0;
-int poti;
+// Variable zur Programmsteuerung
+int Hell = 80;
+int OldHell = 80;
+
+boolean LichtAn = OFF;
+boolean OldLichtAn = OFF;
+boolean LedAn = OFF;
+
+int prog = 0; // aus, wenn Platine startet
+int OldProg = 1; // Vorheriges Programm Regenbogen
+
+int erster_dot = 0; // Erste LED im Durchlauf
+int dot_counter = 0; // 
+
+int del = 200; // ms Verzögerung
+
+// Berechnung der Linearen Werte wenn NUM_LEDS != 255;
+int hue;
+int hue_start = 0; // immer bei 0 beginnen in der Farbskala
+int delta_hue = 256; // hue_ende - hue_start+1;
+int hue_count = 0;
+
+int delta_led = NUM_LEDS;
+int led_count = 0;
+
+int dot = 0;
+int dot_count = 0;
+
+// Variable für Einänge und Ausgänge
+int EinAus = ON;
+int OldEinAus = ON;
+
+int Potiakt = 0;
+
+int Zurueck = OFF;
+int OldZurueck = OFF;
+
+int Vor = OFF;
+int OldVor = OFF;
 
 //-----------------------------------------------------------------
 
 void setup()
 {
-  //----  Digital I/O setzen
+  // Digital I/O setzen
   pinMode(LED_PIN, OUTPUT); // LED_PIN als Ausgang definieren
-  //pinMode(EINAUS, INPUT);   // Ein Aus Schalter als EIngang definieren
-  //pinMode(ZURUECK, INPUT);  // ZURUECK-Schalter als Eingang definieren
-  //pinMode(VOR, INPUT);      // VOR-Schalter als Eingang definieren
-  
-  pinMode(DIGIN7, INPUT);
-  pinMode(DIGIN8, INPUT);
-  pinMode(DIGIN9, INPUT);
-  pinMode(DIGIN10, INPUT);
-  pinMode(DIGIN12, INPUT);
-  pinMode(DIGIN13, INPUT);
-  pinMode(DIGIN14, INPUT);
-  pinMode(DIGIN15, INPUT);
+  pinMode(EINAUS, INPUT);
+  pinMode(ZURUECK, INPUT);
+  pinMode(VOR, INPUT);
 
   //---- Ausgabe für Debug
-  Serial.begin(9600);
+  //Serial.begin(9600);
   
   //---- LED initialisieren  
   FastLED.addLeds<NEOPIXEL, LED_PIN>(leds, NUM_LEDS);
-
-  //---- Variable setzen
-  hue_counter = 0;
-  hue_start = 0;
+  
+  // ausschalten
+  FastLED.showColor(CRGB(0,0,0));
 }
 
 void loop()
 {
+
     // Potentiometer auslesen
-    potiakt = analogRead(POTI); // Potentiometer auslesen (0..1023)
+    Potiakt = analogRead(POTI); // Potentiometer auslesen (0..1023)
+    Hell = MINHELL + Potiakt * (256 - MINHELL) / 1024;
+
+    // Programm vorschalten
+    Vor = digitalRead(VOR);
+    if (Vor != OldVor && Vor == HIGH && prog != 0)
+    {
+      // Programm eins vorschalten
+      prog++;
+
+      if (prog > MAXPROG)
+      {
+        // wenn am letzten Programm angekommen wieder vorne beginnen
+        prog = 1;
+      }
+
+      //warten
+      delay(del);
+    }
+
+
+    // Programm zurückschalten
+    Zurueck = digitalRead(ZURUECK);
+    if (Zurueck != OldZurueck && Zurueck == HIGH && prog != 0)
+    {
+      // Programm eins vorschalten
+      prog--;
+
+      if (prog < 1)
+      {
+        // wenn am letzten Programm angekommen wieder vorne beginnen
+        prog = MAXPROG;
+      }
+
+      //warten
+      delay(del);
+    }
+
+    // Einaus-Schalter auslesen
+    EinAus = digitalRead(EINAUS);   // EinAus Schalter auslesen
+    if (EinAus != OldEinAus && EinAus == HIGH)
+    {
+      if (LichtAn == OFF)
+      {
+        LichtAn = ON;
+      }
+      else
+      {
+        LichtAn = OFF;
+      }
+      //warten
+      delay(del);
+    }
+
+    // In alt status übernehmen
+    OldEinAus = EinAus;
     
-    // Wert speichern
-    potim[potiw] = potiakt;
-
-    // Wertspeicher shiften
-    potiw++;
-    if (potiw > MITTEL_N)
+    // Lampe ein/ausschalten
+    if (OldLichtAn != LichtAn)
     {
-      potiw = 0;
+        if (LichtAn == OFF)
+        {
+          OldProg = prog;
+          prog = 0;
+        }
+        else
+        {
+          prog = OldProg;
+        }
+        OldLichtAn = LichtAn;
     }
 
-    // Mittelwert berechnen
-    poti = 0;
-    for (int j=0; j<MITTEL_N; j++)
-    {
-      poti += potim[j];
-    }
-    poti /= MITTEL_N;
-
-    int hue;
-    //int einaus = digitalRead(EINAUS);   // EinAus Schalter auslesen
     //int zurueck = digitalRead(ZURUECK); // Zurück Schalter auslesen
     //int vor = digitalRead(VOR);         // Vor Schalter auslesen
-
-/*
-    int d7 = digitalRead(DIGIN7);
-    int d8 = digitalRead(DIGIN8);
-    int d9 = digitalRead(DIGIN9);
-    int d10 = digitalRead(DIGIN10);
-    int d12 = digitalRead(DIGIN12);
-    int d13 = digitalRead(DIGIN13);
-    int d14 = digitalRead(DIGIN14);
-    int d15 = digitalRead(DIGIN15);
-
-    Serial.print("POTI: ");
-    Serial.print(pot);
-    Serial.print("\n");
-
-    Serial.print(d7);
-    Serial.print(" ");
-    Serial.print(d8);
-    Serial.print(" ");
-    Serial.print(d9);
-    Serial.print(" ");
-    Serial.print(d10);
-    Serial.print(" ");
-    Serial.print(d12);
-    Serial.print(" ");
-    Serial.print(d13);
-    Serial.print(" ");
-    Serial.print(d14);
-    Serial.print(" ");
-    Serial.print(d15);
-    Serial.print("\n");
     
-    delay(500);
-*/      
   //--------  Jetzt LEDs setzen
   switch(prog)
   {
-    case 0:
-      if (lichtan)
+    case 0:  // ausschalten
+      if (LedAn)
       {
         FastLED.showColor(CRGB(0,0,0));
       }
-      lichtan = false;
+      LedAn = false;
+
+      //200 ms warten
+      delay(200);
       break;
       
-    case 1:
+    case 1:  // Programm 1
 
-      // Poti steuert Geschwindigkeit und Helligkeit
-
-      hue_geschw = (poti / 128) + 1;
-
-      // Helligkeit
-      hellakt = poti/8;
-      hellakt = hellakt % 16;
-      hellakt = 135 + hellakt * 8;
-      hellm[hellw] = hellakt;
-
-      // Wertspeicher shiften
-      hellw++;
-      if (hellw > HELLMITTELN)
-      {
-        hellw = 0;
-      }
-
-      // Mittelwert berechnen
-      hell = 0;
-      for (int j=0; j<HELLMITTELN; j++)
-      {
-        hell += hellm[j];
-      }
-      hell /= HELLMITTELN;
+      // Poti steuert Helligkeit
       
-      Serial.print(hell);
-      Serial.print("\n");
-      
-      if (hell > 255)
-      {
-        hell = 255;
-      }
-      else if (hell < 40)
-      {
-        hell = 0;
-      }
-      
-
       // LEDS setzen
       hue = hue_start; // Mit Start Hue Wert beginnen
+      dot = erster_dot; // Mit erster LED beginnen
+      dot_count = 0;
+      delta_led = NUM_LEDS; // alle Farben auf alle LED verteilen
 
-      // Farbe für jede LED setzen
-      for (int dot = 0; dot < NUM_LEDS; dot++)
+      // LED-Farben setzen
+      while (dot_count < NUM_LEDS)
       {
-        // Starten mit der ersten mit dem hue_startwert
-        leds[dot] = CHSV(hue,255,hell);
+        // Farbwert setzen
+        leds[dot] = CHSV(hue,255,Hell);
 
-        // 
-        hue_counter = hue_counter + (NUM_LEDS / hue_geschw);  // 
-        if (hue_counter >= NUM_LEDS)
+        // Nächste LED
+        dot++;
+
+        // Am Ende des LED-Stripes angekommen?
+        if (dot >= NUM_LEDS)
         {
-          hue++;
-          hue_counter = hue_counter - NUM_LEDS;
-          if (hue > 255)
+          dot = 0;
+        }
+
+        // nächsten Farbwert berechnen
+        if (delta_led > delta_hue) // Gibt es mehr LEDs als Farbwerte?
+        { // Mehr LEDs als Farbwerte
+          // Steigungsrechnung mit Hilfsvariable
+          led_count += delta_hue;
+
+          // Hue-Wert ggf. anpassen
+          if (led_count >= delta_led)
           {
-            hue = 0;
+            // Nächster Farbwert
+            hue++;
+
+            // Steigungsberechnung
+            led_count -= delta_led;
           }
         }
-/*        
-        Serial.print("HUE : ");
-        Serial.print(hue);
-        Serial.print(", ");
-        Serial.print(hue_counter);
-        Serial.print("\n");
-*/       
-      }
+        else // Es gibt weniger LEDS als Farbwerte
+        {
+          while (hue_count <= delta_hue)
+          {
+            // Nächster Farbwert
+            hue++;
 
+            // Steigerungsberechnung
+            hue_count += delta_led;
+          }
+
+          // Steigungsrechnung
+          hue_count -= delta_hue;
+        }
+
+        // LED Zähler inkrementieren
+        dot_count++;
+      }
+      // LEDS anzeigen
       FastLED.show();
-      delay(50);
 
-      // Hue Startwert um 1 erhöhen
-      hue_start++;
-      if (hue_start >255)
+      // Verschieben des Regenbogens
+      erster_dot++;
+      if (erster_dot >= NUM_LEDS)
       {
-        hue_start = 0;
+        erster_dot = 0;
       }
-      
+
+      // LED leuchten
+      LedAn = true;
+
+      // 30ms warten
+      delay(300);
       break;
         
     case 2:
+
+      // Poti steuert Helligkeit
+      
+      // LEDS setzen
+      hue = hue_start; // Mit Start Hue Wert beginnen
+      dot = erster_dot; // Mit erster LED beginnen
+      dot_count = 0;
+      delta_led = NUM_LEDS; // alle Farben auf alle LED verteilen
+
+      // LED-Farben setzen
+      while (dot_count < NUM_LEDS)
+      {
+        // Farbwert setzen
+        leds[dot] = CHSV(hue,255,Hell);
+
+        // Nächste LED
+        dot++;
+
+        // Am Ende des LED-Stripes angekommen?
+        if (dot >= NUM_LEDS)
+        {
+          dot = 0;
+        }
+
+        // nächsten Farbwert berechnen
+        if (delta_led > delta_hue) // Gibt es mehr LEDs als Farbwerte?
+        { // Mehr LEDs als Farbwerte
+          // Steigungsrechnung mit Hilfsvariable
+          led_count += delta_hue;
+
+          // Hue-Wert ggf. anpassen
+          if (led_count >= delta_led)
+          {
+            // Nächster Farbwert
+            hue++;
+
+            // Steigungsberechnung
+            led_count -= delta_led;
+          }
+        }
+        else // Es gibt weniger LEDS als Farbwerte
+        {
+          while (hue_count <= delta_hue)
+          {
+            // Nächster Farbwert
+            hue++;
+
+            // Steigerungsberechnung
+            hue_count += delta_led;
+          }
+
+          // Steigungsrechnung
+          hue_count -= delta_hue;
+        }
+
+        // LED Zähler inkrementieren
+        dot_count++;
+      }
+      // LEDS anzeigen
+      FastLED.show();
+
+      // Verschieben des Regenbogens
+      erster_dot--;
+      if (erster_dot < 0)
+      {
+        erster_dot = NUM_LEDS-1;
+      }
+
+      // LED leuchten
+      LedAn = true;
+
+      // 30ms warten
+      delay(300);
+      break;
+
+    case 3:     
+
+      // Poti steuert Helligkeit
+      
+      // LEDS setzen
+      hue = hue_start; // Mit Start Hue Wert beginnen
+      dot = erster_dot; // Mit erster LED beginnen
+      dot_count = 0;
+      delta_led = NUM_LEDS/2; // alle Farben auf die Hälfte der LED verteilen
+
+      // LED-Farben setzen
+      while (dot_count < NUM_LEDS/2)
+      {
+        // Farbwert setzen
+        leds[dot] = CHSV(hue,255,Hell);
+        leds[NUM_LEDS-1-dot] = CHSV(hue,255,Hell);
+
+        // Nächste LED
+        dot++;
+
+        // Am Ende des LED-Stripes angekommen?
+        if (dot >= NUM_LEDS)
+        {
+          dot = 0;
+        }
+
+        // nächsten Farbwert berechnen
+        if (delta_led > delta_hue) // Gibt es mehr LEDs als Farbwerte?
+        { // Mehr LEDs als Farbwerte
+          // Steigungsrechnung mit Hilfsvariable
+          led_count += delta_hue;
+
+          // Hue-Wert ggf. anpassen
+          if (led_count >= delta_led)
+          {
+            // Nächster Farbwert
+            hue++;
+
+            // Steigungsberechnung
+            led_count -= delta_led;
+          }
+        }
+        else // Es gibt weniger LEDS als Farbwerte
+        {
+          while (hue_count <= delta_hue)
+          {
+            // Nächster Farbwert
+            hue++;
+
+            // Steigerungsberechnung
+            hue_count += delta_led;
+          }
+
+          // Steigungsrechnung
+          hue_count -= delta_hue;
+        }
+
+        // LED Zähler inkrementieren
+        dot_count++;
+      }
+      // LEDS anzeigen
+      FastLED.show();
+
+      // Verschieben des Regenbogens
+      erster_dot++;
+      if (erster_dot >= NUM_LEDS)
+      {
+        erster_dot = 0;
+      }
+
+      // LED leuchten
+      LedAn = true;
+
+      // 30ms warten
+      delay(300);
+      break;
+
+    case 4:
       break;
   }
+}
 /*
   else
   {
@@ -249,5 +424,3 @@ void loop()
     }
   }
 */
-}
-

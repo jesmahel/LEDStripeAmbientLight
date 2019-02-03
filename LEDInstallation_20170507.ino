@@ -1,5 +1,5 @@
 #include <FastLED.h>
-#define NUM_LEDS 28
+#define NUM_LEDS 291
 //#define LED_ECKE = 12
 
 //----  Digital out

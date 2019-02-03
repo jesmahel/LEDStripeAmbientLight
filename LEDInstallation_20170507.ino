@@ -1,5 +1,5 @@
 #include <FastLED.h>
-#define NUM_LEDS 291
+#define NUM_LEDS 28
 //#define LED_ECKE = 12
 
 //----  Digital out
@@ -90,8 +90,11 @@ void loop()
 
     // Potentiometer auslesen
     Potiakt = analogRead(POTI); // Potentiometer auslesen (0..1023)
-    Hell = MINHELL + Potiakt * (256 - MINHELL) / 1024;
-
+    Hell = Potiakt /4;
+    if (Hell < MINHELL)
+    {
+      Hell = MINHELL;
+    }
     // Programm vorschalten
     Vor = digitalRead(VOR);
     if (Vor != OldVor && Vor == HIGH && prog != 0)
@@ -104,6 +107,8 @@ void loop()
         // wenn am letzten Programm angekommen wieder vorne beginnen
         prog = 1;
       }
+
+      hue_start = 0;
 
       //warten
       delay(del);
@@ -123,6 +128,7 @@ void loop()
         prog = MAXPROG;
       }
 
+      hue_start = 0;
       //warten
       delay(del);
     }
@@ -184,7 +190,7 @@ void loop()
       
       // LEDS setzen
       hue = hue_start; // Mit Start Hue Wert beginnen
-      dot = erster_dot; // Mit erster LED beginnen
+      dot = 0; // Mit erster LED beginnen
       dot_count = 0;
       delta_led = NUM_LEDS; // alle Farben auf alle LED verteilen
 
@@ -241,10 +247,10 @@ void loop()
       FastLED.show();
 
       // Verschieben des Regenbogens
-      erster_dot++;
-      if (erster_dot >= NUM_LEDS)
+      hue_start--;
+      if (hue_start < 0)
       {
-        erster_dot = 0;
+        hue_start = 255;
       }
 
       // LED leuchten
@@ -260,7 +266,7 @@ void loop()
       
       // LEDS setzen
       hue = hue_start; // Mit Start Hue Wert beginnen
-      dot = erster_dot; // Mit erster LED beginnen
+      dot = 0; // Mit erster LED beginnen
       dot_count = 0;
       delta_led = NUM_LEDS; // alle Farben auf alle LED verteilen
 
@@ -317,17 +323,17 @@ void loop()
       FastLED.show();
 
       // Verschieben des Regenbogens
-      erster_dot--;
-      if (erster_dot < 0)
+      hue_start++;
+      if (hue_start > 255)
       {
-        erster_dot = NUM_LEDS-1;
+        hue_start = 0;
       }
 
       // LED leuchten
       LedAn = true;
 
-      // 30ms warten
-      delay(300);
+      // 200ms warten
+      delay(200);
       break;
 
     case 3:     
@@ -336,7 +342,7 @@ void loop()
       
       // LEDS setzen
       hue = hue_start; // Mit Start Hue Wert beginnen
-      dot = erster_dot; // Mit erster LED beginnen
+      dot = 0; // Mit erster LED beginnen
       dot_count = 0;
       delta_led = NUM_LEDS/2; // alle Farben auf die Hälfte der LED verteilen
 
@@ -394,17 +400,17 @@ void loop()
       FastLED.show();
 
       // Verschieben des Regenbogens
-      erster_dot++;
-      if (erster_dot >= NUM_LEDS)
+      hue_start++;
+      if (hue_start >= 255)
       {
-        erster_dot = 0;
+        hue_start = 0;
       }
 
       // LED leuchten
       LedAn = true;
 
-      // 30ms warten
-      delay(300);
+      // 20ms warten
+      delay(200);
       break;
 
     case 4:
